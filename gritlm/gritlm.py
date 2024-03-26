@@ -76,7 +76,7 @@ class GritLM(torch.nn.Module):
 
     def encode_queries(self, queries: Union[List[str], str], **kwargs) -> np.ndarray:
         """Used for encoding the queries of retrieval or reranking tasks"""
-        return self.encode(queries, **kwargs)
+        return self.sparse_encode(queries, **kwargs)
 
     def encode_corpus(self, corpus: Union[List[str], str, List[Dict[str, str]]], **kwargs) -> np.ndarray:
         """Used for encoding the corpus of retrieval tasks"""
@@ -87,10 +87,98 @@ class GritLM(torch.nn.Module):
                 doc["title"] + " " + doc["text"] if "title" in doc 
                 else doc["text"] for doc in corpus
             ]
-        return self.encode(corpus, **kwargs)
+        return self.sparse_encode(corpus, **kwargs)
+
+    # @torch.no_grad()
+    # def encode(
+    #     self,
+    #     sentences: Union[List[str], str],
+    #     batch_size: int = 256,
+    #     max_length: int = 512,
+    #     instruction: str = "",
+    #     embed_instruction: bool = False,
+    #     get_cache: bool = False,
+    #     convert_to_tensor: bool = False,
+    #     recast: bool = False,
+    #     add_special_tokens: bool = True,
+    #     **kwargs,
+    # ) -> np.ndarray:
+    #     if self.num_gpus > 1:
+    #         batch_size *= self.num_gpus
+
+    #     input_was_string = False
+    #     if isinstance(sentences, str):
+    #         sentences = [sentences]
+    #         input_was_string = True
+
+    #     all_embeddings, all_kv_caches = [], []
+    #     for start_index in tqdm(range(0, len(sentences), batch_size), desc="Batches", disable=len(sentences)<256):
+    #         sentences_batch = [
+    #             instruction + s + self.embed_eos for s in sentences[start_index:start_index + batch_size]
+    #         ]
+    #         # This will prepend the bos token if the tokenizer has `add_bos_token=True`
+    #         inputs = self.tokenizer(
+    #             sentences_batch,
+    #             padding=True,
+    #             truncation=True,
+    #             return_tensors='pt',
+    #             max_length=max_length,
+    #             add_special_tokens=add_special_tokens,
+    #         ).to(self.device)
+
+    #         if (self.attn is not None) and (self.attn[:2] == 'bb'):
+    #             inputs["is_causal"] = False
+    #         if get_cache:
+    #             inputs['use_cache'] = True
+    #         outputs = (
+    #             getattr(self.model, self.embedding_attr) if self.embedding_attr else self.model
+    #         )(**inputs)
+    #         last_hidden_state = outputs[0]
+    #         print(last_hidden_state.shape)
+    #         if get_cache:
+    #             # Tuple of `tuple(torch.FloatTensor)` of length `config.n_layers`, with each tuple having 2 tensors of shape `(batch_size, num_heads, sequence_length, embed_size_per_head)`
+    #             assert len(all_kv_caches) == 0, "Can only get cache for one batch at a time"
+    #             all_kv_caches = outputs[1]
+
+    #         if self.projection:
+    #             last_hidden_state = self.projection(last_hidden_state)
+    #         if (instruction) and (embed_instruction is False) and ("mean" in self.pooling_method):
+    #             # Remove instruction tokens from the embeddings by masking them
+    #             instruction_tokens = self.tokenizer(
+    #                 instruction,
+    #                 padding=False,
+    #                 truncation=True,
+    #                 max_length=max_length,
+    #                 add_special_tokens=add_special_tokens,
+    #             )["input_ids"]
+    #             inputs['attention_mask'][:, :len(instruction_tokens)] = 0
+    #         embeddings = self.pooling(last_hidden_state, inputs['attention_mask'], recast=recast)
+    #         # Normalize can change the dtype (https://discuss.pytorch.org/t/tensor-in-float16-is-transformed-into-float32-after-torch-norm/110891)
+    #         print(embeddings.shape)
+    #         if self.normalized: 
+    #             in_dtype = embeddings.dtype
+    #             embeddings = torch.nn.functional.normalize(embeddings, dim=-1).to(in_dtype)
+    #         embeddings = cast(torch.Tensor, embeddings)
+    #         if convert_to_tensor:
+    #             all_embeddings.append(embeddings)
+    #         else:
+    #             # NumPy does not support bfloat16
+    #             all_embeddings.append(embeddings.cpu().to(torch.float32).numpy())
+
+    #     all_embeddings = (
+    #         torch.cat(all_embeddings, dim=0) if convert_to_tensor else np.concatenate(all_embeddings, axis=0)
+    #     )
+    #     if input_was_string:
+    #         all_embeddings = all_embeddings[0]
+    #     if get_cache:
+    #         # all_kv_caches = (
+    #         #     torch.stack(all_kv_caches, dim=0) if convert_to_tensor else np.concatenate(all_kv_caches, axis=0)
+    #         # )
+    #         return all_embeddings, all_kv_caches
+    #     return all_embeddings
 
     @torch.no_grad()
-    def encode(
+    def sparse_encode(
         self,
         sentences: Union[List[str], str],
         batch_size: int = 256,
@@ -102,7 +190,7 @@ class GritLM(torch.nn.Module):
         recast: bool = False,
         add_special_tokens: bool = True,
         **kwargs,
-    ) -> np.ndarray:
+    ) :
         if self.num_gpus > 1:
             batch_size *= self.num_gpus
 
@@ -126,21 +214,14 @@ class GritLM(torch.nn.Module):
                 add_special_tokens=add_special_tokens,
             ).to(self.device)
 
-            if (self.attn is not None) and (self.attn[:2] == 'bb'):
-                inputs["is_causal"] = False
+            inputs["is_causal"] = True
             if get_cache:
                 inputs['use_cache'] = True
             outputs = (
                 getattr(self.model, self.embedding_attr) if self.embedding_attr else self.model
             )(**inputs)
             last_hidden_state = outputs[0]
-            if get_cache:
-                # Tuple of `tuple(torch.FloatTensor)` of length `config.n_layers`, with each tuple having 2 tensors of shape `(batch_size, num_heads, sequence_length, embed_size_per_head)`
-                assert len(all_kv_caches) == 0, "Can only get cache for one batch at a time"
-                all_kv_caches = outputs[1]
-
-            if self.projection:
-                last_hidden_state = self.projection(last_hidden_state)
+            last_hidden_state = self.model.lm_head(last_hidden_state)
             if (instruction) and (embed_instruction is False) and ("mean" in self.pooling_method):
                 # Remove instruction tokens from the embeddings by masking them
                 instruction_tokens = self.tokenizer(
@@ -151,7 +232,7 @@ class GritLM(torch.nn.Module):
                     add_special_tokens=add_special_tokens,
                 )["input_ids"]
                 inputs['attention_mask'][:, :len(instruction_tokens)] = 0
-            embeddings = self.pooling(last_hidden_state, inputs['attention_mask'], recast=recast)
+            embeddings = self.sparse_pooling(last_hidden_state, inputs['attention_mask'], recast=recast)
             # Normalize can change the dtype (https://discuss.pytorch.org/t/tensor-in-float16-is-transformed-into-float32-after-torch-norm/110891)
             if self.normalized: 
                 in_dtype = embeddings.dtype
@@ -174,6 +255,15 @@ class GritLM(torch.nn.Module):
             # )
             return all_embeddings, all_kv_caches
         return all_embeddings
+    
+    def sparse_pooling(
+            self, hidden_state: torch.Tensor, attention_mask: torch.Tensor = None, recast: bool = False
+    ) -> torch.Tensor:
+        if self.pooling_method == "mean":
+            return torch.sum(torch.log(1 + torch.relu(hidden_state)) * attention_mask.unsqueeze(-1), dim=1)
+        else:
+            values, _ = torch.max(torch.log(1 + torch.relu(hidden_state)) * attention_mask.unsqueeze(-1), dim=1)
+            return values
 
     def pooling(
         self, hidden_state: torch.Tensor, attention_mask: torch.Tensor = None, recast: bool = False

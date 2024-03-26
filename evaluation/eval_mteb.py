@@ -1119,7 +1119,7 @@ if __name__ == '__main__':
         # so embeddings are automatically normalized
         "normalized": False,
         "torch_dtype": DTYPE_TO_TORCH_DTYPE.get(args.dtype, torch.bfloat16),
-        "mode": "embedding",
+        "mode": "unified",
         "pooling_method": args.pooling_method,
         "attn_implementation": args.attn_implementation,
         "attn": args.attn,
