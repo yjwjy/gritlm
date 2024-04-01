@@ -1,1 +1,5 @@
 gritlm/training/msmarco_train.jsonl
+gritlm/wandb/*
+gritlm/output/*
+gritlm/test_path/*
+gritlm/training/test_path/*
