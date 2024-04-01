@@ -26,7 +26,7 @@ class GritLM(torch.nn.Module):
                 from transformers import T5EncoderModel
                 self.model = T5EncoderModel.from_pretrained(model_name_or_path, **kwargs)
             else:
-                self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
+                self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
             self.embedding_attr = None
         else:
             self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
@@ -76,7 +76,7 @@ class GritLM(torch.nn.Module):
 
     def encode_queries(self, queries: Union[List[str], str], **kwargs) -> np.ndarray:
         """Used for encoding the queries of retrieval or reranking tasks"""
-        return self.sparse_encode(queries, **kwargs)
+        return self.encode(queries, **kwargs)
 
     def encode_corpus(self, corpus: Union[List[str], str, List[Dict[str, str]]], **kwargs) -> np.ndarray:
         """Used for encoding the corpus of retrieval tasks"""
@@ -87,7 +87,7 @@ class GritLM(torch.nn.Module):
                 doc["title"] + " " + doc["text"] if "title" in doc 
                 else doc["text"] for doc in corpus
             ]
-        return self.sparse_encode(corpus, **kwargs)
+        return self.encode(corpus, **kwargs)
 
     # @torch.no_grad()
     # def encode(
@@ -178,7 +178,7 @@ class GritLM(torch.nn.Module):
     #     return all_embeddings
 
     @torch.no_grad()
-    def sparse_encode(
+    def encode(
         self,
         sentences: Union[List[str], str],
         batch_size: int = 256,
