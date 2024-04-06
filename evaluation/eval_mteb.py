@@ -1167,7 +1167,7 @@ if __name__ == '__main__':
         model.model = get_peft_model(model.model, peft_config)
         model.model.print_trainable_parameters()
 
-        # model.model.load_state_dict(torch.load(args.save_path))
+        model = model.load_state_dict(torch.load(args.save_path))
 
         
     if args.embedding_head:

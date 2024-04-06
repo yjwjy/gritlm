@@ -3,3 +3,5 @@ gritlm/wandb/*
 gritlm/output/*
 gritlm/test_path/*
 gritlm/training/test_path/*
+**/__pycache__/*
+test.ipynb
