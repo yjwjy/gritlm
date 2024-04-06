@@ -1,5 +1,6 @@
-CUDA_VISIBLE_DEVICES=0 python evaluation/eval_mteb.py \
---model_name_or_path  /home/data0/wjy/e5-mistral-7b-instruct \
+CUDA_VISIBLE_DEVICES=7 python -m debugpy --listen 5678 --wait-for-client evaluation/eval_mteb.py \
+--model_name_or_path  /root/Mistral-7B-Instruct-v0.1 \
+--save_path /root/gritlm/gritlm/output/msmarco_train/pytorch_model.bin \
 --instruction_set e5 \
 --instruction_format gritlm \
 --task_names SciFact \
@@ -7,4 +8,5 @@ CUDA_VISIBLE_DEVICES=0 python evaluation/eval_mteb.py \
 --pipeline_parallel \
 --attn_implementation sdpa \
 --attn cccc \
---pooling_method mean
+--pooling_method mean \
+--qlora true

@@ -1099,6 +1099,9 @@ def get_args():
     parser.add_argument('--pooling_method', default='mean', type=str)
     parser.add_argument('--save_qrels', action='store_true')
     parser.add_argument('--top_k', default=10, type=int)    
+    parser.add_argument('--qlora', default=False)
+    parser.add_argument('--lora', default=False)
+    parser.add_argument('--save_path', default=None, type=str)
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -1141,6 +1144,32 @@ if __name__ == '__main__':
         kwargs["projection"] = args.embedding_head
 
     model = GritLM(**kwargs)
+
+    if (args.lora) or (args.qlora):
+        if args.qlora:
+            from peft import prepare_model_for_kbit_training
+            model.model = prepare_model_for_kbit_training(
+                model.model, use_gradient_checkpointing=True
+            )
+
+        from peft import get_peft_model, LoraConfig, TaskType, PeftType
+        # https://github.com/texttron/tevatron/blob/2e5d00ee21d5a7db0bd2ea1463c9150a572106d4/examples/repllama/repllama.py#L81
+        # https://github.com/allenai/open-instruct/blob/9ebcb582cfc243a6dab75b4302fa432784db26c2/open_instruct/finetune.py#L478
+        peft_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM, 
+            inference_mode=False, 
+            r=16, 
+            lora_alpha=64,
+            lora_dropout=0.1,
+            target_modules=["q_proj", "o_proj", "v_proj", "k_proj", "w1", "w2", "w3"]
+        )
+        model.model.enable_input_require_grads()
+        model.model = get_peft_model(model.model, peft_config)
+        model.model.print_trainable_parameters()
+
+        # model.model.load_state_dict(torch.load(args.save_path))
+
+        
     if args.embedding_head:
         model.load_state_dict(
             torch.load(args.model_name_or_path + "/embedding_head.bin"), strict=False,
