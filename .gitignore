@@ -5,3 +5,4 @@ gritlm/test_path/*
 gritlm/training/test_path/*
 **/__pycache__/*
 test.ipynb
+eval_mistral_102.sh
