@@ -230,6 +230,7 @@ def main():
         pooling_method=model_args.pooling_method,
         negatives_cross_device=training_args.negatives_cross_device,
         temperature=training_args.temperature,
+        embedding_mode = training_args.embedding_mode,
         mode=training_args.mode,
         projection=model_args.projection,
         attn=model_args.attn,
@@ -315,6 +316,8 @@ def main():
         ),
         "tokenizer": tokenizer,
     }
+    # if training_args.embedding_mode == 'dense':
+    #     trainer_kwargs['label_smoother'] = True
 
     if gc_chunk_size is not None:
         from .gradcache_trainer import GradCacheTrainer

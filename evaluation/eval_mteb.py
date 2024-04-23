@@ -1149,7 +1149,7 @@ if __name__ == '__main__':
         if args.qlora:
             from peft import prepare_model_for_kbit_training
             model.model = prepare_model_for_kbit_training(
-                model.model, use_gradient_checkpointing=True
+                model.model, use_gradient_checkpointing=True, gradient_checkpointing_kwargs=args.save_path
             )
 
         from peft import get_peft_model, LoraConfig, TaskType, PeftType
@@ -1167,7 +1167,8 @@ if __name__ == '__main__':
         model.model = get_peft_model(model.model, peft_config)
         model.model.print_trainable_parameters()
 
-        model.load_state_dict(torch.load(args.save_path))
+        state_dict = torch.load(args.save_path)
+        model.load_state_dict(state_dict)
 
         
     if args.embedding_head:

@@ -106,6 +106,12 @@ class CustomTrainingArguments(TrainingArguments):
             " A higher temperature can reduce the value of similarity between texts in downstream tasks."
         }
     )
+    embedding_mode: str = field(
+        default='sparse',
+        metadata={
+            "help": "choose embedding mode, sparse or dense"
+        }
+    )
     mode: str = field(
         default='embedding', 
         metadata={

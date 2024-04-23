@@ -115,8 +115,10 @@ class GritLMTrainModel(GritLM):
         negatives_cross_device: bool = False,
         loss_gen_type: str = "mixed",
         loss_gen_factor: float = None,
+        embedding_mode: str = 'sparse',
         **kwargs,
     ):
+        kwargs['embedding_mode'] = embedding_mode
         super().__init__(**kwargs, is_inference=False)
         self.emb_loss_fn = DistributedContrastiveLoss(temperature, negatives_cross_device)
         self.gen_add_kwargs = {"return_dict": True}
@@ -130,6 +132,7 @@ class GritLMTrainModel(GritLM):
                 self.model.config.vocab_size, loss_gen_type, loss_gen_factor
             )
         self.config = self.model.config # Required for accelerate DeepSpeed integration
+        self.embedding_mode = embedding_mode
 
     def encode(self, features):
         if features is None: return None
@@ -142,7 +145,10 @@ class GritLMTrainModel(GritLM):
             kwargs['instruction_lens'] = instruction_lens
         elif self.attn[:2] == 'bb':
             kwargs['is_causal'] = False
-        out = (getattr(self.model, self.embedding_attr) if self.embedding_attr else self.model)(**kwargs)[0]
+        if self.embedding_mode == 'dense':
+            out = (getattr(self.model, self.embedding_attr) if self.embedding_attr else self.model)(**kwargs, output_hidden_states=True)['hidden_states'][-1]
+        else:
+            out = (getattr(self.model, self.embedding_attr) if self.embedding_attr else self.model)(**kwargs)[0]
 
         if self.projection is not None:
             out = self.projection(out)
@@ -156,8 +162,10 @@ class GritLMTrainModel(GritLM):
                 attention_mask[i, :l] = 0
                 # Make sure not all zeros - If this happens it is a bug
                 assert attention_mask[i].sum() > 0, f"All 0: {attention_mask[i]}, l: {l}"
-
-        reps = self.pooling(out, attention_mask)
+        if self.embedding_mode == 'sparse':
+            reps = self.sparse_pooling(out, attention_mask)
+        else:
+            reps = self.pooling(out, attention_mask)
         # Normalize can change the dtype (https://discuss.pytorch.org/t/tensor-in-float16-is-transformed-into-float32-after-torch-norm/110891)
         if self.normalized: 
             in_dtype = reps.dtype

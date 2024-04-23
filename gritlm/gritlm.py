@@ -10,6 +10,7 @@ class GritLM(torch.nn.Module):
     def __init__(
         self,
         model_name_or_path: str = None,
+        embedding_mode: str = 'sparse',
         mode: str = 'unified', # One of ['unified', 'embedding', 'generative']        
         pooling_method: str = 'mean', # One of ['cls', 'lasttoken', 'mean', 'weightedmean']
         normalized: bool = True,
@@ -20,13 +21,17 @@ class GritLM(torch.nn.Module):
         **kwargs, # Passed to the model, e.g. `attn_implementation`, `torch_dtype` etc.
     ) -> None:
         super().__init__()
+        self.embedding_mode = embedding_mode
         if mode == 'embedding':
             if any([x in model_name_or_path for x in ['gtr', 't5', 'instructor']]):
                 # Somehow AutoModel does not pick the right one by default
                 from transformers import T5EncoderModel
                 self.model = T5EncoderModel.from_pretrained(model_name_or_path, **kwargs)
             else:
-                self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
+                if self.embedding_mode == 'sparse':
+                    self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
+                else:
+                    self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
             self.embedding_attr = None
         else:
             self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
